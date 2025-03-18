@@ -39,8 +39,16 @@ android {
 
 dependencies {
     api 'androidx.multidex:multidex:2.0.1'
-    classpath 'com.android.tools.build:gradle:7.2.0'
     api fileTree(dir: 'libs', include: ['*.jar'])
     api 'androidx.appcompat:appcompat:1.4.0'
     api project(':love')
+}
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.2.0'
+    }
 }
