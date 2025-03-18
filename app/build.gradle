@@ -1,23 +1,113 @@
-apply plugin: 'com.android.application'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.2.0' // Use the correct AGP version
+    }
+}
+
+plugins {
+    id 'com.android.application'
+}
 
 android {
-    compileSdkVersion 31
-    buildToolsVersion '31.0.0'
-    ndkVersion '21.3.6528147'
+    namespace "org.love2d.android"
+    ndkVersion '27.1.12297006'
+
     defaultConfig {
-        applicationId 'org.love2d.android'
-        versionCode 30
-        versionName '11.4'
-        minSdkVersion 16
-        targetSdkVersion 31
+        applicationId project.properties["app.application_id"]
+        versionCode project.properties["app.version_code"].toInteger()
+        versionName project.properties["app.version_name"]
+        minSdk 23
+        compileSdk 35
+        targetSdk 35
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=1"
+                targets "love_android", "OpenAL", "love"
+            }
+        }
+
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+            debugSymbolLevel 'full'
+        }
+
+        def getAppName = {
+            def nameArray = project.properties["app.name_byte_array"]
+            def name = project.properties["app.name"]
+            if (name != null && nameArray != null) {
+                throw new Exception("Only define either `app.name` or `app.name_byte_array` in gradle.properties, but not both!")
+            }
+
+            if (name == null) {
+                def nameArraySplit = nameArray.split(",")
+                def nameBytes = new byte[nameArraySplit.length]
+                def count = 0
+                for (String s: nameArraySplit) {
+                    nameBytes[count++] = (byte) Integer.parseInt(s)
+                }
+                return new String(nameBytes, StandardCharsets.UTF_8)
+            }
+            return name
+        }
+
+        manifestPlaceholders = [
+            NAME:getAppName(),
+            ORIENTATION:project.properties["app.orientation"],
+        ]
     }
+
+    def retrieveAll3pModules = { ->
+        def modules = []
+
+        fileTree("src/main/cpp/lua-modules/").visit { FileVisitDetails details ->
+            if (details.isDirectory()) {
+                if (file(details.file.path + "/Android.mk").exists() ||
+                        file(details.file.path + "/CMakeLists.mk").exists()) {
+                    def logger = project.getLogger()
+                    logger.lifecycle("3rd-party module: " + details.file.path)
+
+                    def javainfo = file(details.file.path + "/java.txt")
+                    if (javainfo.exists()) {
+                        def fstream = new FileInputStream(javainfo)
+                        def infile = new BufferedReader(new InputStreamReader(fstream))
+                        def javapath = infile.readLine().replace("\\", "/")
+                        def mpath = null
+
+                        if (javapath[0] != '/') {
+                            mpath = details.file.path + "/" + javapath
+                        } else {
+                            mpath = details.file.path + javapath
+                        }
+
+                        modules << mpath
+
+                        logger.lifecycle("Registered path " + mpath)
+                        infile.close()
+                    }
+                }
+            }
+        }
+
+        return modules
+    }
+
     buildTypes {
         release {
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    flavorDimensions 'mode', 'recording'
+
+    buildFeatures {
+        prefab true
+    }
+
+    flavorDimensions = ['mode', 'recording']
     productFlavors {
         normal {
             dimension 'mode'
@@ -32,23 +122,60 @@ android {
             dimension 'recording'
         }
     }
-    lintOptions {
-        abortOnError false
+
+    sourceSets {
+        main {
+            java {
+                srcDir 'src/main/cpp/megasource/libs/SDL3/android-project/app/src/main/java'
+                srcDir 'src/main/java'
+                srcDir 'src/main/cpp/love/src/libraries/luahttps/src/android/java'
+                srcDirs += retrieveAll3pModules()
+            }
+        }
+        normal {
+            java {
+                srcDir 'src/normal/java'
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    buildFeatures {
+        viewBinding true
+    }
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.21.0+'
+        }
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+            excludes += [
+                'lib/armeabi-v7a/libOpenSLES.so',
+                'lib/arm64-v8a/libOpenSLES.so',
+                'lib/x86/libOpenSLES.so',
+                'lib/x86_64/libOpenSLES.so'
+            ]
+        }
     }
 }
 
 dependencies {
-    api 'androidx.multidex:multidex:2.0.1'
-    api fileTree(dir: 'libs', include: ['*.jar'])
-    api 'androidx.appcompat:appcompat:1.4.0'
-    api project(':love')
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    implementation 'androidx.navigation:navigation-fragment:2.8.5'
+    implementation 'androidx.navigation:navigation-ui:2.8.5'
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.oboe:oboe:1.9.3'
 }
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:7.2.0'
-    }
+
+configurations.implementation {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
 }
