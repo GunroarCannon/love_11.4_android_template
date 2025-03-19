@@ -106,8 +106,8 @@ android {
     buildFeatures {
         prefab true
     }
-
-    flavorDimensions = ['mode', 'recording']
+    
+    flavorDimensions 'mode', 'recording'
     productFlavors {
         normal {
             dimension 'mode'
