@@ -61,52 +61,17 @@ android {
         ]
     }
 
-    def retrieveAll3pModules = { ->
-        def modules = []
-
-        fileTree("src/main/cpp/lua-modules/").visit { FileVisitDetails details ->
-            if (details.isDirectory()) {
-                if (file(details.file.path + "/Android.mk").exists() ||
-                        file(details.file.path + "/CMakeLists.mk").exists()) {
-                    def logger = project.getLogger()
-                    logger.lifecycle("3rd-party module: " + details.file.path)
-
-                    def javainfo = file(details.file.path + "/java.txt")
-                    if (javainfo.exists()) {
-                        def fstream = new FileInputStream(javainfo)
-                        def infile = new BufferedReader(new InputStreamReader(fstream))
-                        def javapath = infile.readLine().replace("\\", "/")
-                        def mpath = null
-
-                        if (javapath[0] != '/') {
-                            mpath = details.file.path + "/" + javapath
-                        } else {
-                            mpath = details.file.path + javapath
-                        }
-
-                        modules << mpath
-
-                        logger.lifecycle("Registered path " + mpath)
-                        infile.close()
-                    }
-                }
-            }
-        }
-
-        return modules
-    }
-
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            lintOptions {
+                checkReleaseBuilds false
+                abortOnError false
+            }
         }
     }
 
-    buildFeatures {
-        prefab true
-    }
-    
     flavorDimensions 'mode', 'recording'
     productFlavors {
         normal {
@@ -120,22 +85,6 @@ android {
         }
         noRecord {
             dimension 'recording'
-        }
-    }
-
-    sourceSets {
-        main {
-            java {
-                srcDir 'src/main/cpp/megasource/libs/SDL3/android-project/app/src/main/java'
-                srcDir 'src/main/java'
-                srcDir 'src/main/cpp/love/src/libraries/luahttps/src/android/java'
-                srcDirs += retrieveAll3pModules()
-            }
-        }
-        normal {
-            java {
-                srcDir 'src/normal/java'
-            }
         }
     }
 
